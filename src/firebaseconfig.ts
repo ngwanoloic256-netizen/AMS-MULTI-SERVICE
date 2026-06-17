@@ -10,6 +10,9 @@ import {
   signInWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged,
+  sendEmailVerification,
+  GoogleAuthProvider,
+  signInWithPopup,
   User
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
@@ -35,10 +38,30 @@ export async function connecter(email: string, motDePasse: string): Promise<User
   return result.user;
 }
 
+// Connexion avec Google
+export async function connecterAvecGoogle(): Promise<User> {
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({
+    prompt: 'select_account'
+  });
+  const result = await signInWithPopup(auth, provider);
+  return result.user;
+}
+
 // Créer un compte / Sign Up
 export async function inscrire(email: string, motDePasse: string): Promise<User> {
   const result = await createUserWithEmailAndPassword(auth, email, motDePasse);
+  await sendEmailVerification(result.user);
   return result.user;
+}
+
+// Renvoyer un email de vérification (ex: bouton "Je n'ai pas reçu l'email de vérification")
+export async function renvoyerEmailVerification(): Promise<void> {
+  if (auth.currentUser) {
+    await sendEmailVerification(auth.currentUser);
+  } else {
+    throw new Error("Aucun utilisateur n'est connecté. Connectez-vous d'abord.");
+  }
 }
 
 // Se déconnecter / Sign Out

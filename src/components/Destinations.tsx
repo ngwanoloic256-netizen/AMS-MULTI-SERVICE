@@ -122,11 +122,15 @@ export const Destinations: React.FC = () => {
           
           {/* LEFT COLUMN: Vetted Interactive Country Selector Cards Grid (5 cols) */}
           <div className="lg:col-span-5 grid grid-cols-2 gap-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-            {filteredDestinations.map((dest) => {
+            {filteredDestinations.map((dest, idx) => {
               const isActive = dest.id === selectedCountryId;
               return (
-                <button
+                <motion.button
                   key={dest.id}
+                  initial={{ opacity: 0, y: 15, scale: 0.98 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ once: true, margin: '-20px' }}
+                  transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1], delay: idx * 0.05 }}
                   onClick={() => {
                     setSelectedCountryId(dest.id);
                   }}
@@ -161,7 +165,7 @@ export const Destinations: React.FC = () => {
                       <span>{dest.processingTime}</span>
                     </div>
                   </div>
-                </button>
+                </motion.button>
               );
             })}
             

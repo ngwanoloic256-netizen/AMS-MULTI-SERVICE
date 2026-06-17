@@ -122,11 +122,11 @@ export const Services: React.FC = () => {
               <motion.div
                 layout
                 key={service.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                viewport={{ once: true, margin: '-50px' }}
-                transition={{ duration: 0.5, delay: idx * 0.1 }}
+                initial={{ opacity: 0, y: 20, scale: 0.98 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98, y: -10 }}
+                viewport={{ once: true, margin: '-40px' }}
+                transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay: idx * 0.08 }}
                 className="group relative overflow-hidden flex flex-col justify-between p-8 sm:p-10 rounded-2xl bg-white dark:bg-ams-blue-dark/60 border border-slate-200 dark:border-ams-gold/10 shadow-[0_4px_30px_rgba(0,0,0,0.02)] dark:shadow-[0_4px_30px_rgba(0,0,0,0.2)] hover:border-ams-gold/30 hover:scale-[1.02] transition-all duration-300"
               >
                 {/* Visual Glass Shimmer Hover Backgdrop */}

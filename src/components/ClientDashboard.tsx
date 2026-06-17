@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from './LanguageContext';
 import { useEngagementTracker } from '../hooks/useEngagementTracker';
 import { D3EngagementStats } from './D3EngagementStats';
-import { connecter, inscrire, deconnecter, onAuthStateChanged, auth, db } from '../firebaseconfig';
+import { connecter, inscrire, deconnecter, onAuthStateChanged, auth, db, renvoyerEmailVerification, connecterAvecGoogle } from '../firebaseconfig';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { 
   User, 
@@ -57,11 +57,14 @@ export const ClientDashboard: React.FC = () => {
   const [uploadMessage, setUploadMessage] = useState('');
   const [toastMessage, setToastMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isEmailVerified, setIsEmailVerified] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
 
   // Initial dummy dossier load or real Firestore retrieval via dynamic Auth State
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        setIsEmailVerified(user.emailVerified);
         setIsLoading(true);
         try {
           const userDocRef = doc(db, 'users', user.uid);
@@ -107,6 +110,7 @@ export const ClientDashboard: React.FC = () => {
       } else {
         setDossier(null);
         setIsAuthenticated(false);
+        setIsEmailVerified(false);
       }
     });
 
@@ -178,6 +182,73 @@ export const ClientDashboard: React.FC = () => {
       triggerToast(language === 'FR' ? 'Session sécurisée terminée.' : 'Secure Session Teardown Complete.');
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    try {
+      await connecterAvecGoogle();
+      triggerToast(
+        language === 'FR' 
+          ? 'Connexion Google réussie !' 
+          : 'Google Auth Sign-In Confirmed!'
+      );
+      trackFunnelStep('dashboardRegistered');
+    } catch (error: any) {
+      console.error(error);
+      triggerToast(
+        error.message || (language === 'FR' ? 'Échec de la connexion Google' : 'Google Sign-In failed')
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResendLoading(true);
+    try {
+      await renvoyerEmailVerification();
+      triggerToast(
+        language === 'FR' 
+          ? 'E-mail de vérification envoyé !' 
+          : 'Verification email sent!'
+      );
+    } catch (error: any) {
+      console.error(error);
+      triggerToast(
+        error.message || (language === 'FR' ? "Échec de l'envoi." : "Resend failed.")
+      );
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  const checkVerificationStatus = async () => {
+    if (auth.currentUser) {
+      setIsLoading(true);
+      try {
+        await auth.currentUser.reload();
+        setIsEmailVerified(auth.currentUser.emailVerified);
+        if (auth.currentUser.emailVerified) {
+          triggerToast(
+            language === 'FR' 
+              ? 'Adresse email vérifiée avec succès !' 
+              : 'Email address verified successfully!'
+          );
+        } else {
+          triggerToast(
+            language === 'FR' 
+              ? 'L\'adresse n\'est pas encore vérifiée.' 
+              : 'Email not verified yet.'
+          );
+        }
+      } catch (error: any) {
+        console.error(error);
+        triggerToast(error.message || "Failed to check status");
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -419,6 +490,24 @@ export const ClientDashboard: React.FC = () => {
                         </>
                       )}
                     </button>
+
+                    <div className="relative my-4 flex py-1 items-center">
+                      <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+                      <span className="flex-shrink mx-4 text-slate-400 text-[10px] uppercase tracking-wider font-mono">
+                        {language === 'FR' ? 'Ou continuer avec' : 'Or continue with'}
+                      </span>
+                      <div className="flex-grow border-t border-slate-200 dark:border-slate-800"></div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleGoogleSignIn}
+                      disabled={isLoading}
+                      className="w-full py-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300 font-sans font-semibold text-xs tracking-wide transition-all duration-200 cursor-pointer inline-flex items-center justify-center gap-2.5 disabled:opacity-50"
+                    >
+                      <span className="w-5 h-5 flex items-center justify-center text-[10px] font-black bg-gradient-to-r from-ams-gold to-ams-gold-dark text-slate-900 rounded-full">G</span>
+                      <span>{language === 'FR' ? 'Se connecter avec Google' : 'Sign In with Google'}</span>
+                    </button>
                   </form>
                 </div>
 
@@ -475,6 +564,44 @@ export const ClientDashboard: React.FC = () => {
                     </button>
                   </div>
                 </div>
+
+                {!isEmailVerified && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-[0_2px_15px_rgba(245,158,11,0.05)]">
+                    <div className="flex items-start gap-3">
+                      <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                        <Clock className="w-4 h-4 animate-pulse" />
+                      </div>
+                      <div>
+                        <h5 className="font-display font-semibold text-amber-800 dark:text-amber-400 text-sm">
+                          {language === 'FR' ? "Vérification de l'adresse e-mail requise" : 'Email Verification Required'}
+                        </h5>
+                        <p className="font-sans text-xs text-slate-500 dark:text-slate-400 mt-1">
+                          {language === 'FR' 
+                            ? "Un e-mail de vérification a été envoyé automatiquement lors de l'inscription. Veuillez cliquer sur le lien reçu pour approuver et valider votre compte."
+                            : 'An automated activation message was dispatched to your email. Click the validation link to officially authenticate your dossier.'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 md:self-center">
+                      <button
+                        onClick={checkVerificationStatus}
+                        disabled={isLoading}
+                        className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 font-sans font-bold rounded text-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                      >
+                        {isLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                        <span>{language === 'FR' ? 'Vérifier le statut' : 'Verify Status'}</span>
+                      </button>
+                      <button
+                        onClick={handleResendVerification}
+                        disabled={resendLoading}
+                        className="px-3.5 py-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-700 dark:text-slate-300 font-sans font-medium rounded text-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+                      >
+                        {resendLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}
+                        <span>{language === 'FR' ? "Je n'ai pas reçu l'e-mail de vérification" : "Resend Link"}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* 5-Step timeline tracker */}
                 <div className="rounded-xl border border-slate-200 dark:border-ams-gold/15 bg-white dark:bg-ams-blue-dark/40 p-6 sm:p-8 shadow">
