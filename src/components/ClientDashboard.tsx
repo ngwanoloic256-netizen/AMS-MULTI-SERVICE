@@ -8,6 +8,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from './LanguageContext';
 import { useEngagementTracker } from '../hooks/useEngagementTracker';
 import { D3EngagementStats } from './D3EngagementStats';
+import { connecter, inscrire, deconnecter, onAuthStateChanged, auth, db } from '../firebaseconfig';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { 
   User, 
   Lock, 
@@ -54,66 +56,114 @@ export const ClientDashboard: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState('');
   const [toastMessage, setToastMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Initial dummy dossier load or local storage retrieval
+  // Initial dummy dossier load or real Firestore retrieval via dynamic Auth State
   useEffect(() => {
-    const savedDossier = localStorage.getItem('ams_client_dossier');
-    if (savedDossier) {
-      try {
-        setDossier(JSON.parse(savedDossier));
-        setIsAuthenticated(true);
-        trackFunnelStep('dashboardRegistered');
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  }, [trackFunnelStep]);
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setIsLoading(true);
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDocSnap = await getDoc(userDocRef);
 
-  const handleLogin = (e: React.FormEvent) => {
+          if (userDocSnap.exists()) {
+            setDossier(userDocSnap.data() as ClientDossier);
+            setIsAuthenticated(true);
+            trackFunnelStep('dashboardRegistered');
+          } else {
+            // High-resilience fallback: if registered user doesn't have a record yet
+            const fallbackDossier: ClientDossier = {
+              clientName: fullName || user.email?.split('@')[0] || 'Clarisse KOUAM',
+              email: user.email || '',
+              phone: phone || '+237 693 109 773',
+              destination: destination || 'Canada 🇨🇦',
+              stepIndex: 2,
+              documents: [
+                { name: 'Passeport_International_Scanné.pdf', size: '2.4 MB', status: 'approved', date: '2026-05-12' },
+                { name: 'Relevés_De_Notes_Licence.pdf', size: '4.1 MB', status: 'approved', date: '2026-05-15' },
+                { name: 'Lettre_De_Motivation_Draft_v1.docx', size: '340 KB', status: 'pending', date: '2026-06-01' }
+              ],
+              notifications: [
+                language === 'FR' 
+                  ? 'Profil d\'immigration initialisé sur le serveur sécurisé AMS.' 
+                  : 'Initial immigration profile registered on secure AMS servers.',
+                language === 'FR' 
+                  ? 'Rappel : Votre entretien Campus France/Consulaire blanc est réservé le 18 juin.' 
+                  : 'Friendly notice: Your simulated diplomatic mock Interview is reserved on June 18.'
+              ],
+              adviserName: 'Mme Sandrine MBANG (Expert Senior Fédéral)'
+            };
+            await setDoc(userDocRef, fallbackDossier);
+            setDossier(fallbackDossier);
+            setIsAuthenticated(true);
+            trackFunnelStep('dashboardRegistered');
+          }
+        } catch (error) {
+          console.error('Failed to resolve authenticated customer record:', error);
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
+        setDossier(null);
+        setIsAuthenticated(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [language, trackFunnelStep]);
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
 
-    // Check if previous user dossier registered, else build a mockup VIP one
-    const savedDossier = localStorage.getItem('ams_client_dossier');
-    if (savedDossier) {
-      const parsed = JSON.parse(savedDossier);
-      if (parsed.email === email) {
-        setDossier(parsed);
-        setIsAuthenticated(true);
-        triggerToast(language === 'FR' ? 'Connexion réussie !' : 'Access Granted!');
+    setIsLoading(true);
+
+    if (isRegistering) {
+      try {
+        const user = await inscrire(email, password);
+        const newDossier: ClientDossier = {
+          clientName: fullName || 'Marc-Antoine KOUAM',
+          email: email,
+          phone: phone || '+237 693 109 773',
+          destination: destination || 'Canada 🇨🇦',
+          stepIndex: 2,
+          documents: [
+            { name: 'Passeport_International_Scanné.pdf', size: '2.4 MB', status: 'approved', date: '2026-05-12' },
+            { name: 'Relevés_De_Notes_Licence.pdf', size: '4.1 MB', status: 'approved', date: '2026-05-15' },
+            { name: 'Lettre_De_Motivation_Draft_v1.docx', size: '340 KB', status: 'pending', date: '2026-06-01' }
+          ],
+          notifications: [
+            language === 'FR' 
+              ? 'Félicitations ! Dossier créé sur les serveurs sécurisés d\'AMS.' 
+              : 'Congratulations! Secure dossier initiated on active AMS portals.',
+            language === 'FR' 
+              ? 'Prochaines étapes : Téléverser vos relevés de notes et passeport.' 
+              : 'Next milestones: Upload active transcripts and passport copies.'
+          ],
+          adviserName: 'Mme Sandrine MBANG (Expert Senior Fédéral)'
+        };
+        await setDoc(doc(db, 'users', user.uid), newDossier);
+        triggerToast(language === 'FR' ? 'Compte VIP initialisé !' : 'VIP Profile Created Successfully!');
         trackFunnelStep('dashboardRegistered');
-        return;
+      } catch (error: any) {
+        console.error(error);
+        triggerToast(error.message || (language === 'FR' ? 'Identifiants invalides ou déjà utilisés' : 'Signup error - check connection credentials'));
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      try {
+        await connecter(email, password);
+        triggerToast(language === 'FR' ? 'Accès sécurisé accordé !' : 'Secure Vault Session Granted!');
+        trackFunnelStep('dashboardRegistered');
+      } catch (error: any) {
+        console.error(error);
+        triggerToast(language === 'FR' ? 'Adresse email ou mot de passe incorrect' : 'Invalid cabinet credentials - access denied');
+      } finally {
+        setIsLoading(false);
       }
     }
-
-    // Default premium demo account structure
-    const demoDossier: ClientDossier = {
-      clientName: fullName || 'Marc-Antoine KOUAM',
-      email: email,
-      phone: phone || '+237 693 109 773',
-      destination: destination || 'Canada 🇨🇦',
-      stepIndex: 2, // 'Préparation du dossier' state
-      documents: [
-        { name: 'Passeport_International_Scanné.pdf', size: '2.4 MB', status: 'approved', date: '2026-05-12' },
-        { name: 'Relevés_De_Notes_Licence.pdf', size: '4.1 MB', status: 'approved', date: '2026-05-15' },
-        { name: 'Lettre_De_Motivation_Draft_v1.docx', size: '340 KB', status: 'pending', date: '2026-06-01' }
-      ],
-      notifications: [
-        language === 'FR' 
-          ? 'Votre conseiller premium AMS a approuvé la traduction légalisée de vos relevés.' 
-          : 'Your AMS Premium adviser approved the translated credentials.',
-        language === 'FR' 
-          ? 'Rappel : Votre entretien Campus France/Consulaire blanc est réservé le 18 juin.' 
-          : 'Friendly notice: Your simulated diplomatic mock Interview is reserved on June 18.'
-      ],
-      adviserName: 'Mme Sandrine MBANG (Expert Senior Fédéral)'
-    };
-
-    setDossier(demoDossier);
-    localStorage.setItem('ams_client_dossier', JSON.stringify(demoDossier));
-    setIsAuthenticated(true);
-    triggerToast(language === 'FR' ? 'Accès sécurisé accordé' : 'Secure Session Initialized');
-    trackFunnelStep('dashboardRegistered');
   };
 
   const handleRegisterToggle = () => {
@@ -122,9 +172,13 @@ export const ClientDashboard: React.FC = () => {
     setPassword('');
   };
 
-  const handleSignOut = () => {
-    setIsAuthenticated(false);
-    setDossier(null);
+  const handleSignOut = async () => {
+    try {
+      await deconnecter();
+      triggerToast(language === 'FR' ? 'Session sécurisée terminée.' : 'Secure Session Teardown Complete.');
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const triggerToast = (msg: string) => {
@@ -141,31 +195,56 @@ export const ClientDashboard: React.FC = () => {
     setIsUploading(true);
     setUploadMessage(language === 'FR' ? 'Cryptage AES-256 en cours...' : 'AES-256 Encryption scanning...');
 
-    setTimeout(() => {
+    setTimeout(async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        setIsUploading(false);
+        return;
+      }
+
+      const sizeInMB = file.size / (1024 * 1024);
+      const sizeDisplay = sizeInMB < 0.1 ? `${(file.size / 1024).toFixed(0)} KB` : `${sizeInMB.toFixed(1)} MB`;
+
       const newDoc = {
         name: file.name,
-        size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+        size: sizeDisplay,
         status: 'pending' as const,
         date: new Date().toISOString().split('T')[0]
       };
 
-      const updatedDossier: ClientDossier = {
-        ...dossier,
-        documents: [newDoc, ...dossier.documents],
-        notifications: [
-          language === 'FR' 
-            ? `Nouveau document téléversé avec succès : ${file.name}` 
-            : `New document secured: ${file.name}`,
-          ...dossier.notifications
-        ]
-      };
+      const updatedDocs = [newDoc, ...dossier.documents];
+      const updatedNotifs = [
+        language === 'FR' 
+          ? `Nouveau document téléversé : ${file.name}` 
+          : `New document secured: ${file.name}`,
+        ...dossier.notifications
+      ];
 
-      setDossier(updatedDossier);
-      localStorage.setItem('ams_client_dossier', JSON.stringify(updatedDossier));
-      setIsUploading(false);
-      setUploadMessage('');
-      triggerToast(language === 'FR' ? 'Téléversement sécurisé terminé !' : 'Upload finished successfully!');
-      trackInteraction('documentUploads');
+      try {
+        await updateDoc(doc(db, 'users', user.uid), {
+          documents: updatedDocs,
+          notifications: updatedNotifs
+        });
+
+        setDossier(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            documents: updatedDocs,
+            notifications: updatedNotifs
+          };
+        });
+
+        setIsUploading(false);
+        setUploadMessage('');
+        triggerToast(language === 'FR' ? 'Téléversement sécurisé terminé !' : 'Upload finished successfully!');
+        trackInteraction('documentUploads');
+      } catch (err: any) {
+        console.error(err);
+        setIsUploading(false);
+        setUploadMessage('');
+        triggerToast(language === 'FR' ? 'Échec de la sauvegarde sur le serveur' : 'Failed to save document on the server');
+      }
     }, 1800);
   };
 
@@ -328,10 +407,17 @@ export const ClientDashboard: React.FC = () => {
 
                     <button 
                       type="submit"
-                      className="w-full py-3 rounded bg-gradient-to-r from-ams-gold to-ams-gold-dark text-ams-blue-deep font-sans font-bold uppercase tracking-wider text-xs hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] transition-all cursor-pointer inline-flex items-center justify-center gap-1.5"
+                      disabled={isLoading}
+                      className="w-full py-3 rounded bg-gradient-to-r from-ams-gold to-ams-gold-dark text-ams-blue-deep font-sans font-bold uppercase tracking-wider text-xs hover:shadow-[0_0_20px_rgba(212,175,55,0.3)] transition-all cursor-pointer inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
                     >
-                      <span>{isRegistering ? (language === 'FR' ? 'Initialiser mon dossier' : 'Enroll Portfolio') : (language === 'FR' ? 'Accéder au Coffre-Fort' : 'Unlock Dashboard')}</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      {isLoading ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <>
+                          <span>{isRegistering ? (language === 'FR' ? 'Initialiser mon dossier' : 'Enroll Portfolio') : (language === 'FR' ? 'Accéder au Coffre-Fort' : 'Unlock Dashboard')}</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </>
+                      )}
                     </button>
                   </form>
                 </div>
