@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from './LanguageContext';
 import { useCurrency } from './CurrencyContext';
+import { useEngagementTracker } from '../hooks/useEngagementTracker';
 import { 
   Sparkles, 
   ArrowRight, 
@@ -118,6 +119,7 @@ interface ScoreResult {
 export const OrientationTest: React.FC = () => {
   const { language } = useLanguage();
   const { formatPrice } = useCurrency();
+  const { trackInteraction } = useEngagementTracker();
   const [currentStep, setCurrentStep] = useState<number>(-1); // -1: Intro screen, QUESTIONS.length: results
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [results, setResults] = useState<ScoreResult[]>([]);
@@ -138,6 +140,7 @@ export const OrientationTest: React.FC = () => {
         calculateResults();
         setCurrentStep(QUESTIONS.length);
         setTestCompleted(true);
+        trackInteraction('orientationTestsCompleted');
       }
     }, 250);
   };

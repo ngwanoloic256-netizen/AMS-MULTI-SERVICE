@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from './LanguageContext';
 import { useCurrency } from './CurrencyContext';
+import { useEngagementTracker } from '../hooks/useEngagementTracker';
 import { 
   Briefcase, 
   GraduationCap, 
@@ -123,6 +124,7 @@ const OPPORTUNITIES: Opportunity[] = [
 export const OpportunitiesFeed: React.FC = () => {
   const { language } = useLanguage();
   const { formatPrice } = useCurrency();
+  const { trackInteraction } = useEngagementTracker();
   const [activeCategory, setActiveCategory] = useState<'all' | 'studies' | 'career' | 'event'>('all');
   const [selectedCountry, setSelectedCountry] = useState<'all' | 'Canada' | 'France' | 'Allemagne' | 'UK' | 'USA' | 'UAE'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,6 +138,7 @@ export const OpportunitiesFeed: React.FC = () => {
   });
 
   const handleScrollToBooking = () => {
+    trackInteraction('opportunityClicks');
     const element = document.querySelector('#contact');
     if (element) {
       const offset = 80;

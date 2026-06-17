@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from './LanguageContext';
+import { useEngagementTracker } from '../hooks/useEngagementTracker';
 import { translations } from '../data';
 import { BookingFormInput } from '../types';
 import { 
@@ -25,6 +26,7 @@ import {
 
 export const BookingForm: React.FC = () => {
   const { language } = useLanguage();
+  const { trackInteraction, trackFunnelStep } = useEngagementTracker();
   const t = translations[language];
 
   // Form input states
@@ -112,11 +114,13 @@ export const BookingForm: React.FC = () => {
       
       setIsSubmitting(false);
       setIsSuccess(true);
+      trackFunnelStep('booked');
     }, 2200);
   };
 
   // Trigger click to WhatsApp directly prefilled with booking data for immediate connection
   const handleDirectWhatsApp = () => {
+    trackInteraction('whatsappRedirects');
     const textMessage = `Bonjour AXE-BRIGHT, Je m'appelle ${formData.fullName}. J'ai soumis un dossier de mobilité pour l'opportunité : ${formData.country} (${t.booking.projectTypes[formData.projectType as keyof typeof t.booking.projectTypes] || formData.projectType}). Email : ${formData.email}. Téléphone : ${formData.phone}. Pouvons-nous valider notre RDV pour le ${formData.preferredDate} ? Merci.`;
     const escaped = encodeURIComponent(textMessage);
     // standard WhatsApp international API trigger

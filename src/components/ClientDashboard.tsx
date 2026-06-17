@@ -6,6 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from './LanguageContext';
+import { useEngagementTracker } from '../hooks/useEngagementTracker';
+import { D3EngagementStats } from './D3EngagementStats';
 import { 
   User, 
   Lock, 
@@ -37,6 +39,7 @@ interface ClientDossier {
 
 export const ClientDashboard: React.FC = () => {
   const { language } = useLanguage();
+  const { metrics, trackInteraction, trackFunnelStep } = useEngagementTracker();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   
@@ -59,11 +62,12 @@ export const ClientDashboard: React.FC = () => {
       try {
         setDossier(JSON.parse(savedDossier));
         setIsAuthenticated(true);
+        trackFunnelStep('dashboardRegistered');
       } catch (e) {
         console.error(e);
       }
     }
-  }, []);
+  }, [trackFunnelStep]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,6 +81,7 @@ export const ClientDashboard: React.FC = () => {
         setDossier(parsed);
         setIsAuthenticated(true);
         triggerToast(language === 'FR' ? 'Connexion réussie !' : 'Access Granted!');
+        trackFunnelStep('dashboardRegistered');
         return;
       }
     }
@@ -108,6 +113,7 @@ export const ClientDashboard: React.FC = () => {
     localStorage.setItem('ams_client_dossier', JSON.stringify(demoDossier));
     setIsAuthenticated(true);
     triggerToast(language === 'FR' ? 'Accès sécurisé accordé' : 'Secure Session Initialized');
+    trackFunnelStep('dashboardRegistered');
   };
 
   const handleRegisterToggle = () => {
@@ -159,6 +165,7 @@ export const ClientDashboard: React.FC = () => {
       setIsUploading(false);
       setUploadMessage('');
       triggerToast(language === 'FR' ? 'Téléversement sécurisé terminé !' : 'Upload finished successfully!');
+      trackInteraction('documentUploads');
     }, 1800);
   };
 
@@ -435,6 +442,9 @@ export const ClientDashboard: React.FC = () => {
                     })}
                   </div>
                 </div>
+
+                {/* D3 Analytics Panel */}
+                <D3EngagementStats metrics={metrics} />
 
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   

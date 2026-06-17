@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from './LanguageContext';
+import { useEngagementTracker } from '../hooks/useEngagementTracker';
 import { 
   MessageCircle, 
   X, 
@@ -29,6 +30,7 @@ interface ChatMessage {
 
 export const AIAssistant: React.FC = () => {
   const { language } = useLanguage();
+  const { trackInteraction } = useEngagementTracker();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -69,6 +71,8 @@ export const AIAssistant: React.FC = () => {
 
   const handleSendMessage = (text: string, actionType?: string) => {
     if (!text.trim()) return;
+
+    trackInteraction('messagesToAI');
 
     const userMsg: ChatMessage = {
       id: `user-${Date.now()}`,
